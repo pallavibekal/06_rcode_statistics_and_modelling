@@ -1,0 +1,250 @@
+---
+title: "Linear Modelling"
+author: "Pallavi Krishna"
+date: "2026-01-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+library(GGally)
+library(tidyverse)
+library(data.table)
+library(here)
+library(lme4)
+library("sjPlot")
+library(patchwork)
+library(broom)
+library(broom.mixed)
+library(standardize)
+library(car)
+```
+
+```{r}
+
+load(file="~/downloads/data/crops.RData")
+str(crops)
+```
+We will start with the scatterplots that explore the relationship between Yield and Nitrogen and Rainfall
+
+```{r}
+par(mfrow=c(1,2))
+
+plot(crops$yield,crops$nitrogen,
+     xlab="Yield in tons / hectare",
+     ylab="Nitrogen in kg / hectare")
+    
+plot(crops$yield,crops$rainfall,
+     xlab="Yield in tons / hectare",
+     ylab="Rainfall in mm")
+
+```
+The data suggests a strong positive tendency of yield to increase with the amount of Nitrogen fertilizer applied. And suggests a weaker positive trend in relation to rainfall. 
+
+```{r}
+par(mfrow = c(1, 2))
+
+boxplot(crops$nitrogen,
+        main = "Boxplot of Nitrogen",
+        ylab = "Nitrogen (kg/hectare)",
+        col = "lightblue")
+
+boxplot(crops$rainfall,
+        main = "Boxplot of Rainfall",
+        ylab = "Rainfall (mm)",
+        col = "lightgreen")
+```
+
+```{r}
+# Additive model
+m.add = lm(yield~nitrogen + rainfall, data=crops)
+summary(m.add)
+
+```
+
+```{r}
+# check residuals
+qqnorm(m.add$resid,cex.lab=1.5,cex.axis=1.5,
+       xlab="expected quantiles",ylab="residuals",main="")
+qqline(m.add$resid)
+
+plot(crops$yield,m.add$residuals)
+abline(h=0,lty=2)
+
+plot(crops$yield,abs(m.add$residuals))
+abline(h=mean(abs(m.add$residuals)),lty=2)
+```
+```{r}
+vif(m.add)
+```
+
+```{r}
+# First we will build a fully specified model with interaction terms
+m.inter = lm(yield~nitrogen + rainfall + nitrogen:rainfall, data=crops)
+summary(m.inter)
+```
+```{r}
+# check residuals
+qqnorm(m.inter$resid,cex.lab=1.5,cex.axis=1.5,
+       xlab="expected quantiles",ylab="residuals",main="")
+qqline(m.inter$resid)
+
+plot(crops$yield,m.inter$residuals)
+abline(h=0,lty=2)
+
+plot(crops$yield,abs(m.inter$residuals))
+abline(h=mean(abs(m.inter$residuals)),lty=2)
+```
+```{r}
+vif(m.inter, type='predictor')
+```
+
+```{r}
+# Quadratic effect model
+m.quad = lm(yield~ nitrogen + I(nitrogen^2) + rainfall, data=crops)
+summary(m.quad)
+```
+```{r}
+# check residuals
+qqnorm(m.quad$resid,cex.lab=1.5,cex.axis=1.5,
+       xlab="expected quantiles",ylab="residuals",main="")
+qqline(m.quad$resid)
+
+plot(crops$yield,m.quad$residuals)
+abline(h=0,lty=2)
+
+plot(crops$yield,abs(m.quad$residuals))
+abline(h=mean(abs(m.quad$residuals)),lty=2)
+```
+```{r}
+vif(m.quad)
+```
+
+```{r}
+ggpairs(cbind(nitrogen = crops$nitrogen,
+            nitrogen2 = crops$nitrogen^2,
+            rainfall = crops$rainfall), 
+        progress=FALSE)
+```
+```{r}
+
+crops <-crops %>%
+  mutate(nitrogen.centered=nitrogen-mean(nitrogen))
+```
+
+```{r}
+m.quad.centre = lm(yield~ nitrogen.centered + I(nitrogen.centered^2) + rainfall, data=crops)
+summary(m.quad.centre)
+```
+```{r}
+# check residuals
+qqnorm(m.quad.centre$resid,cex.lab=1.5,cex.axis=1.5,
+       xlab="expected quantiles",ylab="residuals",main="")
+qqline(m.quad.centre$resid)
+
+plot(crops$yield,m.quad.centre$residuals)
+abline(h=0,lty=2)
+
+plot(crops$yield,abs(m.quad.centre$residuals))
+abline(h=mean(abs(m.quad.centre$residuals)),lty=2)
+```
+```{r}
+vif(m.quad.centre)
+```
+```{r}
+m.full = lm(yield~ nitrogen.centered + I(nitrogen.centered^2) + rainfall + nitrogen.centered*rainfall, data=crops)
+summary(m.full)
+```
+
+```{r}
+# check residuals
+qqnorm(m.full$resid,cex.lab=1.5,cex.axis=1.5,
+       xlab="expected quantiles",ylab="residuals",main="")
+qqline(m.full$resid)
+
+plot(crops$yield,m.full$residuals)
+abline(h=0,lty=2)
+
+plot(crops$yield,abs(m.full$residuals))
+abline(h=mean(abs(m.full$residuals)),lty=2)
+```
+```{r}
+# layout: 5 models x 3 diagnostics
+par(mfrow = c(2, 3), mar = c(4, 4, 2, 1))
+
+models <- list(
+  m.add = m.add,
+  m.inter = m.inter,
+  m.quad = m.quad,
+  m.quad.centre = m.quad.centre,
+  m.full = m.full
+)
+
+for (name in names(models)) {
+  m <- models[[name]]
+  qqnorm(m$resid,
+         xlab = "expected quantiles",
+         ylab = "residuals",
+         main = name)
+  qqline(m$resid)
+}
+
+par(mfrow = c(1, 1))
+```
+```{r}
+par(mfrow = c(2, 3), mar = c(4, 4, 2, 1))
+
+for (name in names(models)) {
+  m <- models[[name]]
+  plot(crops$yield, m$residuals,
+       xlab = "yield",
+       ylab = "residuals",
+       main = name)
+  abline(h = 0, lty = 2)
+}
+
+par(mfrow = c(1, 1))
+
+```
+```{r}
+par(mfrow = c(2, 3), mar = c(4, 4, 2, 1))
+
+for (name in names(models)) {
+  m <- models[[name]]
+  plot(crops$yield, abs(m$residuals),
+       xlab = "yield",
+       ylab = "|residuals|",
+       main = name)
+  abline(h = mean(abs(m$residuals)), lty = 2)
+}
+
+par(mfrow = c(1, 1))
+```
+```{r}
+anova(m.add, m.inter, m.quad, m.quad.centre, m.full)
+```
+
+```{r}
+AIC(m.add)
+AIC(m.inter)
+AIC(m.quad)
+AIC(m.quad.centre)
+AIC(m.full)
+```
+```{r}
+BIC(m.add)
+BIC(m.inter)
+BIC(m.quad)
+BIC(m.quad.centre)
+BIC(m.full)
+```
+
